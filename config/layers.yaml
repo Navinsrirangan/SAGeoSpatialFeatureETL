@@ -1,0 +1,278 @@
+# SA Geospatial Feature ETL — Layer Configuration
+#
+# ═══════════════════════════════════════════════════════════════════════════
+# SERVICE DISCOVERY REPORT  (surveyed 2026-06-13)
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Sources searched:
+#   location.sa.gov.au/server5   — Only vegetation/land cover rasters. Not useful.
+#   location.sa.gov.au/server6   — PRIMARY SOURCE. See confirmed layers below.
+#   data.sa.gov.au               — SA spatial data not catalogued via public API;
+#                                   redirects to data.gov.au (national) for most queries.
+#   sappa.plan.sa.gov.au         — JavaScript SPA. API returns 403 without auth.
+#   plan.sa.gov.au/arcgis/rest/  — ArcGIS REST server EXISTS but returns 403.
+#                                   Requires credentials. Once authenticated, this
+#                                   server likely exposes the full CurrentOverlays
+#                                   service (heritage, bushfire, FSR/height).
+#
+# ─────────────────────────────────────────────────────────────────────────
+# STATUS LEGEND
+#   CONFIRMED    — URL verified, GeoJSON output tested, feature count confirmed.
+#   AUTH_NEEDED  — Service exists but requires SLIP / plan.sa.gov.au credentials.
+#   EXTERNAL     — Hosted outside SLIP; requires Land Services SA commercial access.
+# ─────────────────────────────────────────────────────────────────────────
+#
+# TO GET AUTH ACCESS
+#   SLIP credentials (for ePlanning/* services on server6 and for server6 LandServices):
+#     Register at https://location.sa.gov.au/ → Data → Request access
+#
+#   plan.sa.gov.au ArcGIS REST (for the full Planning and Design Code overlay set):
+#     Contact DIT.DataRequestsORG@sa.gov.au (SA Government entities)
+#     or browse https://plan.sa.gov.au/ and register for SAPPA portal access.
+#     Once authenticated, browse:
+#       https://plan.sa.gov.au/arcgis/rest/services
+#     to discover CurrentOverlays layer IDs for heritage, bushfire, FSR/height.
+#     Then also try on server6 (same service, may mirror):
+#       https://location.sa.gov.au/server6/rest/services/ePlanning/CurrentOverlays/MapServer
+#
+#   Cadastre via Land Services SA:
+#     Register at https://www.landservices.com.au/ (commercial/government plan)
+#     They provide SAILIS cadastre via SLIP or direct API access.
+#
+# ─────────────────────────────────────────────────────────────────────────
+# LAYER URL FORMAT
+#   service_url must point to the specific layer including layer index:
+#     FeatureServer: https://<host>/rest/services/<Folder>/<Service>/FeatureServer/<idx>
+#     MapServer:     https://<host>/rest/services/<Folder>/<Service>/MapServer/<idx>
+#   The client appends /query to this URL automatically.
+# ═══════════════════════════════════════════════════════════════════════════
+
+layers:
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # ZIP DOWNLOAD LAYERS  (source: zip_download)
+  # ══════════════════════════════════════════════════════════════════════════
+  #
+  # These datasets are served as ZIP archives from dptiapps.com.au.
+  # They are PUBLICLY accessible — no credentials required — but the server
+  # blocks non-browser User-Agents.  ZipDownloader sets the appropriate
+  # User-Agent header automatically.
+  #
+  # Data portal: https://data.sa.gov.au
+  # License:     Creative Commons Attribution 4.0
+  # Datum:       GDA2020 (ZipDownloader selects _GDA2020.geojson inside the ZIP)
+  # ──────────────────────────────────────────────────────────────────────────
+
+  # ── SA Heritage Places ────────────────────────────────────────────────────
+  - name: heritage
+    description: "SA Heritage Places — State and Local Heritage Register items"
+    # STATUS: CONFIRMED PUBLIC — 14.4 MB ZIP, no auth required.
+    # Source:  https://data.sa.gov.au/data/dataset/sa-heritage-places
+    # Fields:  HERITAGENR, PARLOCATION, HERITAGECLASS1 (State/Local/Representative),
+    #          DETAILS (name/description), SHRCODE, LOCATIONACCURACY, POLYGONTYPE
+    source: zip_download
+    download_url: "https://www.dptiapps.com.au/dataportal/SAHeritagePlaces_geojson.zip"
+    output_file: "heritage.geojson"
+    enabled: true
+
+  # ── SA Fire Ban Districts ─────────────────────────────────────────────────
+  - name: fire_ban_districts
+    description: "SA Fire Ban Districts — CFS fire ban district boundaries"
+    # STATUS: CONFIRMED PUBLIC — 4 MB ZIP, no auth required.
+    # Source:  https://data.sa.gov.au/data/dataset/south-australian-fire-ban-districts
+    # Note:    These are administrative CFS districts, not the PDC Designated Bushfire
+    #          Protection Areas overlay (which is inside PDCodeOverlays, see below).
+    source: zip_download
+    download_url: "https://www.dptiapps.com.au/dataportal/FireBanDistricts_geojson.zip"
+    output_file: "fire_ban_districts.geojson"
+    enabled: true
+
+  # ── Land Use Generalised 2025 ─────────────────────────────────────────────
+  - name: land_use
+    description: "SA Land Use Generalised 2025 — parcel-based land use from valuation data"
+    # STATUS: CONFIRMED PUBLIC — 134.6 MB ZIP, no auth required.
+    # Source:  https://data.sa.gov.au/data/dataset/land-use-generalised
+    # Note:    Large download (~135 MB). Set enabled: false to skip if not needed.
+    source: zip_download
+    download_url: "https://www.dptiapps.com.au/dataportal/LandUseGeneralised2025_geojson.zip"
+    output_file: "land_use.geojson"
+    enabled: true
+
+  # ── Planning and Design Code Overlays (all 69 overlays combined) ──────────
+  - name: pdc_overlays
+    description: "PDC Overlays — all 69 Planning and Design Code overlays combined (heritage, bushfire, FSR/height, etc.)"
+    # STATUS: CONFIRMED PUBLIC — but 1,052 MB ZIP. Disabled by default.
+    # Source:  https://data.sa.gov.au/data/dataset/planning-and-design-code-overlays
+    # Note:    The ZIP contains all 69 PDC overlays as a single combined GeoJSON.
+    #          Features can be filtered post-download using the NAME field, e.g.:
+    #            NAME = "Hazards (Bushfire - Designated Bushfire Protection Areas)"
+    #            NAME = "Heritage (State)"
+    #            NAME = "Heritage (Local Conservation)"
+    #            NAME = "Building Height"  (or similar for FSR/height)
+    #          Only enable if you have disk space and time for a 1 GB download.
+    source: zip_download
+    download_url: "https://www.dptiapps.com.au/dataportal/PDCodeOverlays_geojson.zip"
+    output_file: "pdc_overlays.geojson"
+    enabled: true
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # ARCGIS REST LAYERS
+  # ══════════════════════════════════════════════════════════════════════════
+
+  # ── Cadastre ──────────────────────────────────────────────────────────────
+  - name: cadastre
+    description: "SA Cadastre — Lot boundaries, parcel identifiers (PID/lot-plan), lot area"
+    # STATUS: EXTERNAL — Land Services SA commercial account required.
+    # LandServices folder on server6 only exposes a Drillholes MapServer (geological).
+    # Options:
+    #   1. Register at https://www.landservices.com.au/ to obtain SLIP/API credentials.
+    #   2. Once credentialed, request the Cadastre FeatureServer URL from Land Services SA.
+    #   3. SA Gov entities: email DIT.DataRequestsORG@sa.gov.au for internal SLIP access.
+    service_url: "CONFIGURE_ME"
+    output_file: "cadastre.geojson"
+    page_size: 1000
+    out_fields: "*"
+    where: "1=1"
+    enabled: false
+
+  # ── Local Government Areas ────────────────────────────────────────────────
+  - name: lgas
+    description: "SA Local Government Area boundaries"
+    # STATUS: CONFIRMED — same FeatureServer as zones (layer 0), no auth required.
+    service_url: "https://location.sa.gov.au/server6/rest/services/GrowthManagementPublic/CodeAmendments_BaseLayers_plansadb/FeatureServer/0"
+    output_file: "lgas.geojson"
+    page_size: 100
+    page_delay: 1.5
+    geometry_precision: 6
+    out_fields: "*"
+    where: "1=1"
+    enabled: true
+
+  # ── Suburbs / Localities ──────────────────────────────────────────────────
+  - name: suburbs
+    description: "SA Suburb and locality boundaries"
+    # STATUS: CONFIRMED — same FeatureServer as zones (layer 1), no auth required.
+    service_url: "https://location.sa.gov.au/server6/rest/services/GrowthManagementPublic/CodeAmendments_BaseLayers_plansadb/FeatureServer/1"
+    output_file: "suburbs.geojson"
+    page_size: 100
+    page_delay: 1.5
+    geometry_precision: 6
+    out_fields: "*"
+    where: "1=1"
+    enabled: true
+
+  # ── Planning Zones ────────────────────────────────────────────────────────
+  - name: zones
+    description: "Planning and Design Code — Zone boundaries (e.g. APL=Adelaide Park Lands, GN=General Neighbourhood)"
+    # STATUS: CONFIRMED — 5,391 features, no auth required.
+    # Source:  location.sa.gov.au/server6 → GrowthManagementPublic
+    #          → CodeAmendments_BaseLayers_plansadb/FeatureServer/2
+    # Fields:  objectid, id (e.g. "Z0302"), name ("Adelaide Park Lands"),
+    #          value (zone code e.g. "APL"), description, legalstartdate,
+    #          legalenddate, systemstartdate, systemenddate, status,
+    #          Shape__Area, Shape__Length
+    # Note:    Layer 0 = LGAs, Layer 1 = Suburbs, Layer 2 = Code Zones (this one)
+    service_url: "https://location.sa.gov.au/server6/rest/services/GrowthManagementPublic/CodeAmendments_BaseLayers_plansadb/FeatureServer/2"
+    output_file: "zones.geojson"
+    page_size: 100
+    page_delay: 1.5
+    geometry_precision: 6
+    out_fields: "*"
+    where: "1=1"
+    enabled: true
+
+  # ── FSR & Building Height ─────────────────────────────────────────────────
+  - name: fsr_height
+    description: "Planning and Design Code — FSR (Floor Space Ratio) and building height overlays"
+    # STATUS: AUTH_NEEDED
+    # These overlays live in ePlanning/CurrentOverlays on server6 (returns 404
+    # without auth) and likely also at plan.sa.gov.au/arcgis/rest/services (403).
+    # Note: In some zones FSR/height are policy attributes in the zone table rather
+    #       than standalone spatial overlays — confirm with PlanSA before requesting.
+    # Steps once authenticated:
+    #   1. Browse: https://location.sa.gov.au/server6/rest/services/ePlanning/CurrentOverlays/MapServer
+    #   2. Find the layer index for "Building Height" or "Floor Space Ratio" overlay.
+    #   3. Set service_url to: .../ePlanning/CurrentOverlays/MapServer/<layerIndex>
+    service_url: "CONFIGURE_ME"
+    output_file: "fsr_height.geojson"
+    page_size: 2000
+    out_fields: "*"
+    where: "1=1"
+    enabled: false
+
+  # ── Heritage ──────────────────────────────────────────────────────────────
+  - name: heritage
+    description: "SA Heritage — State Heritage Register items and local heritage conservation zones"
+    # STATUS: AUTH_NEEDED
+    # Heritage overlays are in ePlanning/CurrentOverlays on server6 (requires auth).
+    # eplanning/ConsultInterWarHousingHeritage and ConsultMilangLocalHeritage exist
+    # in the ePlanning folder but also return 404 without credentials.
+    # Steps once authenticated:
+    #   1. Browse: https://location.sa.gov.au/server6/rest/services/ePlanning/CurrentOverlays/MapServer
+    #   2. Find layer index for "Heritage (State)" and/or "Heritage (Local)" overlays.
+    #   3. Add separate layer entries for State vs Local heritage if needed.
+    service_url: "CONFIGURE_ME"
+    output_file: "heritage.geojson"
+    page_size: 2000
+    out_fields: "*"
+    where: "1=1"
+    enabled: false
+
+  # ── Bushfire ──────────────────────────────────────────────────────────────
+  - name: bushfire
+    description: "Bushfire risk — Designated Bushfire Protection Areas (DBPA) across SA"
+    # STATUS: AUTH_NEEDED
+    # Bushfire overlays are in ePlanning/CurrentOverlays on server6 (requires auth).
+    # No public equivalent service (like ConsultFlooding for flood) was found for bushfire.
+    # Steps once authenticated:
+    #   1. Browse: https://location.sa.gov.au/server6/rest/services/ePlanning/CurrentOverlays/MapServer
+    #   2. Find layer index for "Hazards (Bushfire)" or "Designated Bushfire Protection Area".
+    #   3. Set service_url to: .../ePlanning/CurrentOverlays/MapServer/<layerIndex>
+    service_url: "CONFIGURE_ME"
+    output_file: "bushfire.geojson"
+    page_size: 2000
+    out_fields: "*"
+    where: "1=1"
+    enabled: false
+
+  # ── Flood (3 PDC sub-layers — publicly accessible) ────────────────────────
+  - name: flood
+    description: "CURRENT - Hazards (Flooding) — main PDC flood hazard overlay"
+    # STATUS: CONFIRMED — 29,721 features, no auth required.
+    # Source:  location.sa.gov.au/server6 → ePlanningPublic
+    #          → ConsultFlooding/MapServer/6  (layer 6 = CURRENT)
+    # Fields:  objectid, id (e.g. "O2403"), name ("Hazards (Flooding)"),
+    #          description, value, legalstartdate, legalenddate,
+    #          systemstartdate, systemenddate, status,
+    #          st_area(shape), st_length(shape)
+    # Note:    Layers 0–5 are PROPOSED variants; layers 6–8 are CURRENT.
+    service_url: "https://location.sa.gov.au/server6/rest/services/ePlanningPublic/ConsultFlooding/MapServer/6"
+    output_file: "flood.geojson"
+    page_size: 2000
+    out_fields: "*"
+    where: "1=1"
+    enabled: true
+
+  - name: flood_general
+    description: "CURRENT - Hazards (Flooding - General) — general flood risk sub-overlay (PDC)"
+    # STATUS: CONFIRMED — same service, layer 7.
+    service_url: "https://location.sa.gov.au/server6/rest/services/ePlanningPublic/ConsultFlooding/MapServer/7"
+    output_file: "flood_general.geojson"
+    page_size: 2000
+    out_fields: "*"
+    where: "1=1"
+    enabled: true
+
+  - name: flood_evidence
+    description: "CURRENT - Hazards (Flooding - Evidence Required) — evidence-required flood sub-overlay (PDC)"
+    # STATUS: CONFIRMED — 119,126 features, same service, layer 8.
+    # NOTE: This layer is large and the server is flaky at page_size=2000 (502/IncompleteRead).
+    #       Using page_size=500 + geometry_precision=6 keeps responses small enough to succeed.
+    service_url: "https://location.sa.gov.au/server6/rest/services/ePlanningPublic/ConsultFlooding/MapServer/8"
+    output_file: "flood_evidence.geojson"
+    page_size: 500
+    page_delay: 1.5
+    geometry_precision: 6
+    out_fields: "*"
+    where: "1=1"
+    enabled: true
