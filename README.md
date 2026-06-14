@@ -32,6 +32,7 @@ SAGeoSpatialFeatureETL/
 │   ├── loader.py                 # Streaming GeoJSON file writer
 │   └── pipeline.py               # Orchestrator + Click CLI
 ├── scripts/
+│   ├── visualize_layer.py        # Interactive HTML map viewer (Folium)
 │   ├── discover_services.py      # Scan server6 public catalog for new layers
 │   └── split_pdc_overlays.py     # Split combined PDC overlays by overlay NAME
 ├── output/                       # GeoJSON output files (git-ignored)
@@ -218,6 +219,43 @@ The ArcGIS client retries up to 5 times with exponential backoff (4s → 8s → 
 ---
 
 ## Utility Scripts
+
+### Layer visualizer
+
+Renders one or more GeoJSON layers on an interactive South Australia map and opens it in your browser. Output is a self-contained HTML file — no server required.
+
+```bash
+# Install dependency (once)
+pip install folium
+
+# List all available GeoJSON files in output/
+python scripts/visualize_layer.py --list
+
+# Visualize a single layer
+python scripts/visualize_layer.py --layer zones
+python scripts/visualize_layer.py --layer heritage
+
+# Colour-code features by a property value
+python scripts/visualize_layer.py --layer zones --color-by value
+python scripts/visualize_layer.py --layer heritage --color-by HERITAGECLASS1
+
+# Overlay multiple layers on the same map
+python scripts/visualize_layer.py --layer zones --layer lgas
+python scripts/visualize_layer.py --layer flood --layer flood_evidence
+
+# Visualize a split PDC overlay file directly
+python scripts/visualize_layer.py --file output/pdc_hazards_bushfire_high_risk.geojson
+
+# Cap features for large layers (flood_evidence has 119K — browsers can struggle)
+python scripts/visualize_layer.py --layer flood_evidence --max-features 20000
+
+# Save to a named file instead of the default output/map.html
+python scripts/visualize_layer.py --layer zones --output output/zones_map.html
+```
+
+The generated HTML includes layer toggle controls, hover tooltips, click popups with the full property table, and a basemap switcher (OpenStreetMap / CartoDB Light).
+
+---
 
 ### Service discovery
 
