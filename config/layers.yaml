@@ -6,7 +6,12 @@
 #
 # Sources searched:
 #   location.sa.gov.au/server5   — Only vegetation/land cover rasters. Not useful.
-#   location.sa.gov.au/server6   — PRIMARY SOURCE. See confirmed layers below.
+#   location.sa.gov.au/server6   — PRIMARY SOURCE for planning data. See confirmed layers below.
+#   lsa4.geohub.sa.gov.au/server — LocationSA MapViewer backend. PUBLICLY ACCESSIBLE.
+#                                   Discovered 2026-06-14 via DevTools on location.sa.gov.au/viewer.
+#                                   Service: .../LSA/LocationSAViewerV34/MapServer
+#                                   Contains: Parcel Cadastre (1.1M), Building Heights (703),
+#                                   Bushfire Protection (353), and 10+ planning/boundary layers.
 #   data.sa.gov.au               — SA spatial data not catalogued via public API;
 #                                   redirects to data.gov.au (national) for most queries.
 #   sappa.plan.sa.gov.au         — JavaScript SPA. API returns 403 without auth.
@@ -35,9 +40,9 @@
 #     Then also try on server6 (same service, may mirror):
 #       https://location.sa.gov.au/server6/rest/services/ePlanning/CurrentOverlays/MapServer
 #
-#   Cadastre via Land Services SA:
-#     Register at https://www.landservices.com.au/ (commercial/government plan)
-#     They provide SAILIS cadastre via SLIP or direct API access.
+#   Cadastre:
+#     Now publicly available via the LocationSA MapViewer backend (see cadastre layer below).
+#     Land Services SA commercial access is no longer required for parcel boundaries.
 #
 # ─────────────────────────────────────────────────────────────────────────
 # LAYER URL FORMAT
@@ -121,19 +126,23 @@ layers:
 
   # ── Cadastre ──────────────────────────────────────────────────────────────
   - name: cadastre
-    description: "SA Cadastre — Lot boundaries, parcel identifiers (PID/lot-plan), lot area"
-    # STATUS: EXTERNAL — Land Services SA commercial account required.
-    # LandServices folder on server6 only exposes a Drillholes MapServer (geological).
-    # Options:
-    #   1. Register at https://www.landservices.com.au/ to obtain SLIP/API credentials.
-    #   2. Once credentialed, request the Cadastre FeatureServer URL from Land Services SA.
-    #   3. SA Gov entities: email DIT.DataRequestsORG@sa.gov.au for internal SLIP access.
-    service_url: "CONFIGURE_ME"
+    description: "SA Parcel Cadastre — lot boundaries, parcel ID, plan/parcel number, title vol/folio"
+    # STATUS: CONFIRMED PUBLIC — 1,139,259 features. No auth required.
+    # Source:  lsa4.geohub.sa.gov.au → LSA/LocationSAViewerV34/MapServer/124
+    # Fields:  objectid, plan_t, plan, parcel_t, parcel_subtype, parcel, title_t,
+    #          volume, folio, qualifier, floor_level, date_from, parcel_id,
+    #          accuracy_code, improved, dcdbid, planparcel, st_area(shape)
+    # Note:    Previously thought to require a Land Services SA commercial account —
+    #          found publicly available via the LocationSA MapViewer backend (2026-06-14).
+    # Note:    Very large extract (~1.1M features, expect 30–60 min). Set enabled: true to run.
+    service_url: "https://lsa4.geohub.sa.gov.au/server/rest/services/LSA/LocationSAViewerV34/MapServer/124"
     output_file: "cadastre.geojson"
-    page_size: 1000
+    page_size: 500
+    page_delay: 1.0
+    geometry_precision: 6
     out_fields: "*"
     where: "1=1"
-    enabled: false
+    enabled: true
 
   # ── Local Government Areas ────────────────────────────────────────────────
   - name: lgas
@@ -181,24 +190,22 @@ layers:
     where: "1=1"
     enabled: true
 
-  # ── FSR & Building Height ─────────────────────────────────────────────────
-  - name: fsr_height
-    description: "Planning and Design Code — FSR (Floor Space Ratio) and building height overlays"
-    # STATUS: AUTH_NEEDED
-    # These overlays live in ePlanning/CurrentOverlays on server6 (returns 404
-    # without auth) and likely also at plan.sa.gov.au/arcgis/rest/services (403).
-    # Note: In some zones FSR/height are policy attributes in the zone table rather
-    #       than standalone spatial overlays — confirm with PlanSA before requesting.
-    # Steps once authenticated:
-    #   1. Browse: https://location.sa.gov.au/server6/rest/services/ePlanning/CurrentOverlays/MapServer
-    #   2. Find the layer index for "Building Height" or "Floor Space Ratio" overlay.
-    #   3. Set service_url to: .../ePlanning/CurrentOverlays/MapServer/<layerIndex>
-    service_url: "CONFIGURE_ME"
-    output_file: "fsr_height.geojson"
-    page_size: 2000
+  # ── Building Height Limits ────────────────────────────────────────────────
+  - name: building_heights
+    description: "SA Building Height Limits — max storeys and max height (m) per zone/policy area"
+    # STATUS: CONFIRMED PUBLIC — 703 features. No auth required.
+    # Source:  lsa4.geohub.sa.gov.au → LSA/LocationSAViewerV34/MapServer/255
+    # Fields:  devplan_code, zone, policy, policy_meaning, max_storeys,
+    #          max_height_m, max_height_est_1 (estimated), notes, source, source_date
+    # Note:    FSR (Floor Space Ratio) does not exist as a standalone spatial layer in SA.
+    #          Height limits are encoded here per zone/policy area. Use max_height_m for
+    #          analysis; max_height_est_1 fills in estimated values where exact is unknown.
+    service_url: "https://lsa4.geohub.sa.gov.au/server/rest/services/LSA/LocationSAViewerV34/MapServer/255"
+    output_file: "building_heights.geojson"
+    page_size: 500
     out_fields: "*"
     where: "1=1"
-    enabled: false
+    enabled: true
 
   # ── Heritage ──────────────────────────────────────────────────────────────
   - name: heritage
@@ -218,22 +225,21 @@ layers:
     where: "1=1"
     enabled: false
 
-  # ── Bushfire ──────────────────────────────────────────────────────────────
+  # ── Bushfire Protection Areas ─────────────────────────────────────────────
   - name: bushfire
-    description: "Bushfire risk — Designated Bushfire Protection Areas (DBPA) across SA"
-    # STATUS: AUTH_NEEDED
-    # Bushfire overlays are in ePlanning/CurrentOverlays on server6 (requires auth).
-    # No public equivalent service (like ConsultFlooding for flood) was found for bushfire.
-    # Steps once authenticated:
-    #   1. Browse: https://location.sa.gov.au/server6/rest/services/ePlanning/CurrentOverlays/MapServer
-    #   2. Find layer index for "Hazards (Bushfire)" or "Designated Bushfire Protection Area".
-    #   3. Set service_url to: .../ePlanning/CurrentOverlays/MapServer/<layerIndex>
-    service_url: "CONFIGURE_ME"
+    description: "SA Bushfire Protection Areas — designated bushfire risk zones (legacy dev plan)"
+    # STATUS: CONFIRMED PUBLIC — 353 features. No auth required.
+    # Source:  lsa4.geohub.sa.gov.au → LSA/LocationSAViewerV34/MapServer/356
+    # Fields:  devplan_code, date_cadastre, date_updated, bf_code (BF_Description), criteria
+    # Note:    This is the legacy Development Plan bushfire layer. For current PDC bushfire
+    #          overlays (6 risk tiers), use pdc_overlays or the individual pdc_hazards_bushfire_*
+    #          files produced by split_pdc_overlays.py.
+    service_url: "https://lsa4.geohub.sa.gov.au/server/rest/services/LSA/LocationSAViewerV34/MapServer/356"
     output_file: "bushfire.geojson"
-    page_size: 2000
+    page_size: 500
     out_fields: "*"
     where: "1=1"
-    enabled: false
+    enabled: true
 
   # ── Flood (3 PDC sub-layers — publicly accessible) ────────────────────────
   - name: flood
@@ -258,7 +264,9 @@ layers:
     # STATUS: CONFIRMED — same service, layer 7.
     service_url: "https://location.sa.gov.au/server6/rest/services/ePlanningPublic/ConsultFlooding/MapServer/7"
     output_file: "flood_general.geojson"
-    page_size: 2000
+    page_size: 500
+    page_delay: 1.5
+    geometry_precision: 6
     out_fields: "*"
     where: "1=1"
     enabled: true
@@ -272,6 +280,294 @@ layers:
     output_file: "flood_evidence.geojson"
     page_size: 500
     page_delay: 1.5
+    geometry_precision: 6
+    out_fields: "*"
+    where: "1=1"
+    enabled: true
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # LOCATIONSA MAPVIEWER — PROPERTY AND PLANNING LAYERS
+  # ══════════════════════════════════════════════════════════════════════════
+  #
+  # All layers in this section are from the LocationSA MapViewer backend,
+  # discovered 2026-06-14 by inspecting DevTools Network tab on:
+  #   https://location.sa.gov.au/viewer/
+  #
+  # Service: https://lsa4.geohub.sa.gov.au/server/rest/services/LSA/LocationSAViewerV34/MapServer
+  # Auth:    None required — all publicly accessible.
+  # ──────────────────────────────────────────────────────────────────────────
+
+  # ── Character Preservation Districts ─────────────────────────────────────
+  - name: character_preservation_districts
+    description: "Character Preservation Districts — protected townships under Character Preservation Act"
+    # STATUS: CONFIRMED PUBLIC — 34 features.
+    # Source:  MapServer/182
+    # Coverage: McLaren Vale, Barossa Valley, and similar character protection areas.
+    service_url: "https://lsa4.geohub.sa.gov.au/server/rest/services/LSA/LocationSAViewerV34/MapServer/182"
+    output_file: "character_preservation_districts.geojson"
+    page_size: 500
+    out_fields: "*"
+    where: "1=1"
+    enabled: true
+
+  # ── Energy Efficiency (Climate) Zones ────────────────────────────────────
+  - name: energy_efficiency_zones
+    description: "Energy Efficiency (Climate) Zones — NCC climate zones for building energy compliance"
+    # STATUS: CONFIRMED PUBLIC — 11 features.
+    # Source:  MapServer/212
+    # Used to determine NCC energy efficiency requirements for new buildings.
+    service_url: "https://lsa4.geohub.sa.gov.au/server/rest/services/LSA/LocationSAViewerV34/MapServer/212"
+    output_file: "energy_efficiency_zones.geojson"
+    page_size: 500
+    out_fields: "*"
+    where: "1=1"
+    enabled: true
+
+  # ── Energy Efficiency Concession Areas ───────────────────────────────────
+  - name: energy_efficiency_concession
+    description: "Energy Efficiency Concession Areas — areas with modified NCC energy requirements"
+    # STATUS: CONFIRMED PUBLIC — 96 features.
+    # Source:  MapServer/214
+    service_url: "https://lsa4.geohub.sa.gov.au/server/rest/services/LSA/LocationSAViewerV34/MapServer/214"
+    output_file: "energy_efficiency_concession.geojson"
+    page_size: 500
+    out_fields: "*"
+    where: "1=1"
+    enabled: true
+
+  # ── Corrosion Environment Areas ───────────────────────────────────────────
+  - name: corrosion_environments
+    description: "Corrosion Environment Areas — coastal and surf-coast corrosion risk zones for construction"
+    # STATUS: CONFIRMED PUBLIC — 2 features (general) + surf coast sub-layer.
+    # Source:  MapServer/211 (general), MapServer/210 (surf coast)
+    service_url: "https://lsa4.geohub.sa.gov.au/server/rest/services/LSA/LocationSAViewerV34/MapServer/211"
+    output_file: "corrosion_environments.geojson"
+    page_size: 500
+    out_fields: "*"
+    where: "1=1"
+    enabled: true
+
+  # ── Electricity Regulations Boundaries ───────────────────────────────────
+  - name: electricity_regulations
+    description: "Electricity Regulations Boundaries — SA electricity supply district boundaries"
+    # STATUS: CONFIRMED PUBLIC — 132 features.
+    # Source:  MapServer/194
+    service_url: "https://lsa4.geohub.sa.gov.au/server/rest/services/LSA/LocationSAViewerV34/MapServer/194"
+    output_file: "electricity_regulations.geojson"
+    page_size: 500
+    out_fields: "*"
+    where: "1=1"
+    enabled: true
+
+  # ── Open Space Proclamation Areas ────────────────────────────────────────
+  - name: open_space_proclamation
+    description: "Open Space Proclamation Areas — proclaimed open space under the Open Spaces Act"
+    # STATUS: CONFIRMED PUBLIC — 75 features.
+    # Source:  MapServer/336
+    service_url: "https://lsa4.geohub.sa.gov.au/server/rest/services/LSA/LocationSAViewerV34/MapServer/336"
+    output_file: "open_space_proclamation.geojson"
+    page_size: 500
+    out_fields: "*"
+    where: "1=1"
+    enabled: true
+
+  # ── Metropolitan Adelaide Boundary (Development Act 1993) ─────────────────
+  - name: metro_adelaide_boundary
+    description: "Metropolitan Adelaide Boundary — defined under the Development Act 1993"
+    # STATUS: CONFIRMED PUBLIC — 1 feature (single polygon).
+    # Source:  MapServer/195
+    service_url: "https://lsa4.geohub.sa.gov.au/server/rest/services/LSA/LocationSAViewerV34/MapServer/195"
+    output_file: "metro_adelaide_boundary.geojson"
+    page_size: 10
+    out_fields: "*"
+    where: "1=1"
+    enabled: true
+
+  # ── SA Government Regions ─────────────────────────────────────────────────
+  - name: sa_government_regions
+    description: "SA Government Regions — state administrative region boundaries"
+    # STATUS: CONFIRMED PUBLIC — 12 features.
+    # Source:  MapServer/20
+    service_url: "https://lsa4.geohub.sa.gov.au/server/rest/services/LSA/LocationSAViewerV34/MapServer/20"
+    output_file: "sa_government_regions.geojson"
+    page_size: 500
+    out_fields: "*"
+    where: "1=1"
+    enabled: true
+
+  # ── Counties ──────────────────────────────────────────────────────────────
+  - name: counties
+    description: "SA Counties — historical county-level administrative boundaries"
+    # STATUS: CONFIRMED PUBLIC — 49 features.
+    # Source:  MapServer/2
+    service_url: "https://lsa4.geohub.sa.gov.au/server/rest/services/LSA/LocationSAViewerV34/MapServer/2"
+    output_file: "counties.geojson"
+    page_size: 500
+    out_fields: "*"
+    where: "1=1"
+    enabled: true
+
+  # ── Residential Code Areas (Legacy Dev Plan) ──────────────────────────────
+  - name: residential_code
+    description: "Residential Code — legacy Development Plan residential policy areas with zone codes"
+    # STATUS: CONFIRMED PUBLIC — 1,524 features.
+    # Source:  MapServer/120
+    # Fields:  devplan_code, zone_, zone_meaning, policy, policy_meaning, precinct,
+    #          dev_category, urban_centre, all_codes, data_date, trim_codes, status
+    # Note:    Legacy layer from the old Development Plan system (pre-2021 PDC).
+    #          Use zones.geojson for current Planning and Design Code zones.
+    service_url: "https://lsa4.geohub.sa.gov.au/server/rest/services/LSA/LocationSAViewerV34/MapServer/120"
+    output_file: "residential_code.geojson"
+    page_size: 500
+    out_fields: "*"
+    where: "1=1"
+    enabled: true
+
+  # ── Development Plan Zone Categories (Legacy) ─────────────────────────────
+  - name: development_plan_zones
+    description: "Development Plan Zone Categories — legacy pre-PDC zoning with dev categories"
+    # STATUS: CONFIRMED PUBLIC — 4,563 features.
+    # Source:  MapServer/116
+    # Fields:  devplan_code, zone, zone_meaning, policy, policy_meaning, precinct,
+    #          dev_category, urban_centre, special_use
+    # Note:    Legacy layer from the old Development Plan system (pre-2021 PDC).
+    #          Use zones.geojson for current Planning and Design Code zones.
+    service_url: "https://lsa4.geohub.sa.gov.au/server/rest/services/LSA/LocationSAViewerV34/MapServer/116"
+    output_file: "development_plan_zones.geojson"
+    page_size: 500
+    out_fields: "*"
+    where: "1=1"
+    enabled: true
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # LOCATIONSA MAPVIEWER — ADDITIONAL LAYERS (found 2026-06-14, second pass)
+  # ══════════════════════════════════════════════════════════════════════════
+  # NOTE: Floor Space Ratio (FSR) does NOT exist as a spatial layer anywhere
+  # in this 411-layer service. SA encodes FSR as a policy number in PDC zone
+  # code documents — not as GIS polygons. Use building_heights.geojson for
+  # the closest spatial equivalent (max_height_m / max_storeys per zone).
+  # ──────────────────────────────────────────────────────────────────────────
+
+  # ── Earthquake Hazard Zones ───────────────────────────────────────────────
+  - name: earthquake_hazard
+    description: "Earthquake Hazard Zones — seismic risk zones relevant to building design (NCC)"
+    # STATUS: CONFIRMED PUBLIC — 47 features.
+    # Source:  MapServer/213
+    service_url: "https://lsa4.geohub.sa.gov.au/server/rest/services/LSA/LocationSAViewerV34/MapServer/213"
+    output_file: "earthquake_hazard.geojson"
+    page_size: 500
+    out_fields: "*"
+    where: "1=1"
+    enabled: true
+
+  # ── Environment and Food Production Areas ────────────────────────────────
+  - name: environment_food_production
+    description: "Environment and Food Production Areas — areas protected for primary production and environmental value"
+    # STATUS: CONFIRMED PUBLIC — 8 features.
+    # Source:  MapServer/223
+    service_url: "https://lsa4.geohub.sa.gov.au/server/rest/services/LSA/LocationSAViewerV34/MapServer/223"
+    output_file: "environment_food_production.geojson"
+    page_size: 500
+    out_fields: "*"
+    where: "1=1"
+    enabled: true
+
+  # ── Future Urban Growth Areas ─────────────────────────────────────────────
+  - name: future_urban_growth
+    description: "Future Urban Growth Areas — land identified for future urban development in Adelaide"
+    # STATUS: CONFIRMED PUBLIC — 167 features.
+    # Source:  MapServer/226
+    service_url: "https://lsa4.geohub.sa.gov.au/server/rest/services/LSA/LocationSAViewerV34/MapServer/226"
+    output_file: "future_urban_growth.geojson"
+    page_size: 500
+    out_fields: "*"
+    where: "1=1"
+    enabled: true
+
+  # ── Planned Urban Lands to 2045 (Urban Boundary) ─────────────────────────
+  - name: urban_boundary_2045
+    description: "Planned Urban Lands to 2045 — greater Adelaide urban growth boundary"
+    # STATUS: CONFIRMED PUBLIC — 111 features.
+    # Source:  MapServer/227
+    service_url: "https://lsa4.geohub.sa.gov.au/server/rest/services/LSA/LocationSAViewerV34/MapServer/227"
+    output_file: "urban_boundary_2045.geojson"
+    page_size: 500
+    out_fields: "*"
+    where: "1=1"
+    enabled: true
+
+  # ── Planning Regions 2020 ─────────────────────────────────────────────────
+  - name: planning_regions
+    description: "Planning Regions 2020 — SA planning region boundaries"
+    # STATUS: CONFIRMED PUBLIC — 7 features.
+    # Source:  MapServer/338
+    service_url: "https://lsa4.geohub.sa.gov.au/server/rest/services/LSA/LocationSAViewerV34/MapServer/338"
+    output_file: "planning_regions.geojson"
+    page_size: 500
+    out_fields: "*"
+    where: "1=1"
+    enabled: true
+
+  # ── State Heritage Areas ──────────────────────────────────────────────────
+  - name: state_heritage_areas
+    description: "State Heritage Areas — heritage area boundaries (distinct from individual heritage places)"
+    # STATUS: CONFIRMED PUBLIC — 20 features.
+    # Source:  MapServer/180
+    # Note:    heritage.geojson (zip) covers individual places; this covers heritage area polygons.
+    service_url: "https://lsa4.geohub.sa.gov.au/server/rest/services/LSA/LocationSAViewerV34/MapServer/180"
+    output_file: "state_heritage_areas.geojson"
+    page_size: 500
+    out_fields: "*"
+    where: "1=1"
+    enabled: true
+
+  # ── Residential Broadhectare 2024 ─────────────────────────────────────────
+  - name: residential_broadhectare
+    description: "Residential Broadhectare 2024 — greenfield residential land supply tracking"
+    # STATUS: CONFIRMED PUBLIC — 22,507 features.
+    # Source:  MapServer/320
+    service_url: "https://lsa4.geohub.sa.gov.au/server/rest/services/LSA/LocationSAViewerV34/MapServer/320"
+    output_file: "residential_broadhectare.geojson"
+    page_size: 500
+    out_fields: "*"
+    where: "1=1"
+    enabled: true
+
+  # ── Industrial Land 2018 ──────────────────────────────────────────────────
+  - name: industrial_land
+    description: "Industrial Land 2018 — designated industrial land parcels across SA"
+    # STATUS: CONFIRMED PUBLIC — 15,514 features.
+    # Source:  MapServer/260
+    service_url: "https://lsa4.geohub.sa.gov.au/server/rest/services/LSA/LocationSAViewerV34/MapServer/260"
+    output_file: "industrial_land.geojson"
+    page_size: 500
+    out_fields: "*"
+    where: "1=1"
+    enabled: true
+
+  # ── Land Management Agreements ────────────────────────────────────────────
+  - name: land_management_agreements
+    description: "Land Management Agreements — registered LMAs binding land to conservation conditions"
+    # STATUS: CONFIRMED PUBLIC — 37,124 features.
+    # Source:  MapServer/262
+    service_url: "https://lsa4.geohub.sa.gov.au/server/rest/services/LSA/LocationSAViewerV34/MapServer/262"
+    output_file: "land_management_agreements.geojson"
+    page_size: 500
+    out_fields: "*"
+    where: "1=1"
+    enabled: true
+
+  # ── Valuation Cadastre ────────────────────────────────────────────────────
+  - name: valuation_cadastre
+    description: "Valuation Cadastre — parcel boundaries with valuation-linked identifiers (1M+ features)"
+    # STATUS: CONFIRMED PUBLIC — 1,049,355 features.
+    # Source:  MapServer/125
+    # Note:    Companion to cadastre (layer 124). Use cadastre for plan/title data;
+    #          valuation_cadastre for SA Valuation Office linkage. Very large — opt-in only.
+    service_url: "https://lsa4.geohub.sa.gov.au/server/rest/services/LSA/LocationSAViewerV34/MapServer/125"
+    output_file: "valuation_cadastre.geojson"
+    page_size: 500
+    page_delay: 1.0
     geometry_precision: 6
     out_fields: "*"
     where: "1=1"
